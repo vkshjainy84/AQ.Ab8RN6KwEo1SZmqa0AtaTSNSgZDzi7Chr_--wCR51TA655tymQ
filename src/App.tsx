@@ -23,12 +23,14 @@ import {
   Hash,
   Globe,
   LogIn,
-  LogOut
+  LogOut,
+  Search
 } from 'lucide-react';
 
 import { WidgetInstance, LivePriceState, WidgetTheme, WidgetSize, Wallpaper, Script, WidgetSettings } from './types';
 import { GLOBAL_SCRIPTS, getCountryFlag } from './data/scriptsData';
 import { generateInitialPriceState, updatePriceState } from './utils/priceEngine';
+import { getMarketStatus } from './utils/marketHours';
 import PriceWidget from './components/PriceWidget';
 import AddWidgetModal from './components/AddWidgetModal';
 import PaymentModal from './components/PaymentModal';
@@ -136,6 +138,7 @@ export default function App() {
 
   // Category filter for the desktop "Add live button" row
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'stock' | 'commodity' | 'crypto' | 'currency'>('all');
+  const [scriptSearchQuery, setScriptSearchQuery] = useState<string>('');
   
   // Dynamic configurable refresh timer (minimum 25 seconds)
   const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(() => {
@@ -336,7 +339,17 @@ export default function App() {
     setPrices((prev) => {
       const updated: Record<string, LivePriceState> = {};
       Object.keys(prev).forEach((key) => {
-        updated[key] = updatePriceState(prev[key]);
+        const script = GLOBAL_SCRIPTS.find((s) => s.id === key);
+        if (script) {
+          const status = getMarketStatus(script);
+          if (status.isOpen) {
+            updated[key] = updatePriceState(prev[key]);
+          } else {
+            updated[key] = prev[key];
+          }
+        } else {
+          updated[key] = updatePriceState(prev[key]);
+        }
       });
       return updated;
     });
@@ -429,9 +442,21 @@ export default function App() {
 
   // Filter global scripts database for general buttons lists
   const renderedDatabaseScripts = useMemo(() => {
-    if (selectedCategory === 'all') return GLOBAL_SCRIPTS;
-    return GLOBAL_SCRIPTS.filter(s => s.category === selectedCategory);
-  }, [selectedCategory]);
+    const query = scriptSearchQuery.trim().toLowerCase();
+    return GLOBAL_SCRIPTS.filter((s) => {
+      // If there is an active search query, we search globally (ignoring the category tab filter) for better usability!
+      const matchesCategory = query.length > 0 || selectedCategory === 'all' || s.category === selectedCategory;
+      const matchesSearch = 
+        query.length === 0 ||
+        s.name.toLowerCase().includes(query) ||
+        s.symbol.toLowerCase().includes(query) ||
+        s.country.toLowerCase().includes(query) ||
+        s.category.toLowerCase().includes(query) ||
+        (s.category === 'currency' && query === 'forex') ||
+        s.currencyCode.toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [selectedCategory, scriptSearchQuery]);
 
   return (
     <div className={`min-h-screen transition-all duration-500 ease-out flex flex-col font-sans select-none overflow-x-hidden ${isSystemDarkMode ? 'bg-zinc-950 text-white' : 'bg-slate-50 text-zinc-900'}`}>
@@ -616,7 +641,7 @@ export default function App() {
 
             {/* SECTION A: DESKTOP APP/WIDGET BUTTONS SHACK */}
             <div className="space-y-3.5 bg-black/25 backdrop-blur-md p-6 rounded-[28px] border border-white/5 text-left">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3.5">
                 <div>
                   <h3 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
                     🛠️ Clickex Live Button Dock
@@ -624,98 +649,148 @@ export default function App() {
                   <p className="text-[11px] text-white/50 mt-0.5">Toggle buttons below to instantly spawn dynamic live price windows on the wallpaper.</p>
                 </div>
 
-                {/* Filter tabs */}
-                <div className="flex flex-wrap gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
-                  {[
-                    { id: 'all', name: 'All Assets' },
-                    { id: 'stock', name: 'Stocks' },
-                    { id: 'crypto', name: 'Crypto' },
-                    { id: 'commodity', name: 'Commodities' },
-                    { id: 'currency', name: 'Forex' }
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setSelectedCategory(cat.id as any)}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap cursor-pointer ${
-                        selectedCategory === cat.id ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                  {/* Local script search input */}
+                  <div className="relative flex-1 sm:flex-initial min-w-[250px] md:min-w-[320px]">
+                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Search (e.g., BTC, Tata, Reliance, Gold, India...)"
+                      value={scriptSearchQuery}
+                      onChange={(e) => setScriptSearchQuery(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-14 py-2 text-xs focus:outline-none focus:border-indigo-500 text-white placeholder-zinc-500 transition-all duration-200"
+                    />
+                    {scriptSearchQuery && (
+                      <div className="absolute right-2.5 top-1.5 flex items-center gap-1.5">
+                        <span className="text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-extrabold px-1 rounded uppercase tracking-wider">
+                          Global
+                        </span>
+                        <button
+                          onClick={() => setScriptSearchQuery('')}
+                          type="button"
+                          className="text-zinc-400 hover:text-white text-xs font-black leading-none cursor-pointer p-0.5 bg-white/5 rounded-full"
+                          title="Clear search"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Filter tabs */}
+                  <div className="flex flex-wrap gap-1 bg-black/40 p-1 rounded-xl border border-white/10 text-xs overflow-x-auto shrink-0">
+                    {[
+                      { id: 'all', name: 'All Assets' },
+                      { id: 'stock', name: 'Stocks' },
+                      { id: 'crypto', name: 'Crypto' },
+                      { id: 'commodity', name: 'Commodities' },
+                      { id: 'currency', name: 'Forex' }
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(cat.id as any)}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap cursor-pointer ${
+                          selectedCategory === cat.id ? 'bg-indigo-600 text-white' : 'text-neutral-400 hover:text-neutral-200'
+                        }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Buttons workspace grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
-                {renderedDatabaseScripts.map((script) => {
-                  const isActiveOnDesktop = activeScriptIds.includes(script.id);
-                  const isOpenedDetails = openedWidgetIds.includes(script.id);
-                  const price = prices[script.id];
-                  const increase = price ? price.changePercent >= 0 : true;
+              {renderedDatabaseScripts.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pt-2">
+                  {renderedDatabaseScripts.map((script) => {
+                    const isActiveOnDesktop = activeScriptIds.includes(script.id);
+                    const isOpenedDetails = openedWidgetIds.includes(script.id);
+                    const price = prices[script.id];
+                    const increase = price ? price.changePercent >= 0 : true;
 
-                  return (
-                    <div key={script.id} className="relative group">
-                      {/* Interactive Button-Widget */}
-                      <button
-                        onClick={() => handleToggleScriptButton(script.id)}
-                        className={`w-full p-3 rounded-2xl flex flex-col justify-between items-center text-center transition-all duration-300 relative border cursor-pointer ${
-                          isActiveOnDesktop
-                            ? 'bg-gradient-to-b from-indigo-950/70 to-indigo-900/40 border-indigo-500 shadow-xl shadow-indigo-600/10'
-                            : 'bg-black/35 hover:bg-black/55 border-white/5 hover:border-white/15'
-                        }`}
-                      >
-                        {/* Dynamic Live Update Ring */}
-                        {isActiveOnDesktop && (
-                          <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
-                            increase ? 'bg-emerald-400 animate-pulse shadow-glow-green' : 'bg-red-400 animate-pulse'
-                          }`} />
-                        )}
-
-                        <span className="text-3xl filter drop-shadow mb-1.5 transform group-hover:scale-110 transition duration-300">
-                          {getCountryFlag(script.countryCode)}
-                        </span>
-
-                        <div className="space-y-0.5">
-                          <p className="text-[11px] font-black text-white tracking-wide">{script.symbol}</p>
-                          <p className="text-[9px] text-white/50 truncate max-w-[90px]">{script.name}</p>
-                        </div>
-
-                        {/* Spark Price ticker */}
-                        <div className="mt-2 text-[10px] font-mono bg-black/40 px-2 py-0.5 rounded-md border border-white/5 text-white/80">
-                          {script.currencySymbol}
-                          {price ? price.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 1 }) : script.basePrice}
-                        </div>
-
-                        {/* Interactive Spark indicator status */}
-                        {isActiveOnDesktop && (
-                          <div className={`mt-1 text-[9px] font-bold font-mono ${increase ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {increase ? '▲' : '▼'} {price ? Math.abs(price.changePercent) : 0}%
-                          </div>
-                        )}
-                      </button>
-
-                      {/* Small floating quick toggle button on activated widgets */}
-                      {isActiveOnDesktop && (
+                    return (
+                      <div key={script.id} className="relative group">
+                        {/* Interactive Button-Widget */}
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleWidgetWindow(script.id);
-                          }}
-                          className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border text-[9px] shadow-md transition transform hover:scale-115 cursor-pointer ${
-                            isOpenedDetails
-                              ? 'bg-emerald-500 text-black border-emerald-400 font-black'
-                              : 'bg-zinc-800 text-zinc-300 border-zinc-700 font-bold'
+                          onClick={() => handleToggleScriptButton(script.id)}
+                          className={`w-full p-3 rounded-2xl flex flex-col justify-between items-center text-center transition-all duration-300 relative border cursor-pointer ${
+                            isActiveOnDesktop
+                              ? 'bg-gradient-to-b from-indigo-950/70 to-indigo-900/40 border-indigo-500 shadow-xl shadow-indigo-600/10'
+                              : 'bg-black/35 hover:bg-black/55 border-white/5 hover:border-white/15'
                           }`}
-                          title={isOpenedDetails ? 'Close floating window' : 'Spawn/Show floating window'}
                         >
-                          {isOpenedDetails ? '✓' : 'Launch'}
+                          {/* Dynamic Live Update Ring */}
+                          {isActiveOnDesktop && (
+                            <span className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
+                              increase ? 'bg-emerald-400 animate-pulse shadow-glow-green' : 'bg-red-400 animate-pulse'
+                            }`} />
+                          )}
+
+                          <span className="text-3xl filter drop-shadow mb-1.5 transform group-hover:scale-110 transition duration-300">
+                            {getCountryFlag(script.countryCode)}
+                          </span>
+
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] font-black text-white tracking-wide">{script.symbol}</p>
+                            <p className="text-[9px] text-white/50 truncate max-w-[90px]">{script.name}</p>
+                          </div>
+
+                          {/* Spark Price ticker */}
+                          <div className="mt-2 text-[10px] font-mono bg-black/40 px-2 py-0.5 rounded-md border border-white/5 text-white/80">
+                            {script.currencySymbol}
+                            {price ? price.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 1 }) : script.basePrice}
+                          </div>
+
+                          {/* Interactive Spark indicator status */}
+                          {isActiveOnDesktop && (
+                            <div className={`mt-1 text-[9px] font-bold font-mono ${increase ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {increase ? '▲' : '▼'} {price ? Math.abs(price.changePercent) : 0}%
+                            </div>
+                          )}
                         </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+
+                        {/* Small floating quick toggle button on activated widgets */}
+                        {isActiveOnDesktop && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleWidgetWindow(script.id);
+                            }}
+                            className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border text-[9px] shadow-md transition transform hover:scale-115 cursor-pointer ${
+                              isOpenedDetails
+                                ? 'bg-emerald-500 text-black border-emerald-400 font-black'
+                                : 'bg-zinc-800 text-zinc-300 border-zinc-700 font-bold'
+                            }`}
+                            title={isOpenedDetails ? 'Close floating window' : 'Spawn/Show floating window'}
+                          >
+                            {isOpenedDetails ? '✓' : 'Launch'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-12 text-center rounded-2xl border border-white/5 bg-black/10">
+                  <div className="max-w-xs mx-auto space-y-2">
+                    <p className="text-sm font-bold text-zinc-300">No matching assets found</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      We couldn't find any financial scripts matching "{scriptSearchQuery}". Try another keyword or clear the search filters.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScriptSearchQuery('');
+                        setSelectedCategory('all');
+                      }}
+                      className="mt-2.5 px-3 py-1.5 bg-indigo-650 hover:bg-indigo-600 font-bold text-[11px] rounded-lg text-white transition cursor-pointer"
+                    >
+                      Clear Search Filters
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Free warning limit advice */}
               {!isPremiumUnlocked && activeScriptIds.length >= 5 && (

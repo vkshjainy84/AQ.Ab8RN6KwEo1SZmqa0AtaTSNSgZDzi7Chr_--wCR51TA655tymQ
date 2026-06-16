@@ -44,17 +44,25 @@ export default function AddWidgetModal({
 
   // Filter scripts based on search/category/country
   const filteredScripts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return GLOBAL_SCRIPTS.filter((script) => {
-      const matchSearch =
-        script.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        script.symbol.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchCategory = selectedCategory === 'all' || script.category === selectedCategory;
+      // If there is an active search query, we search globally (ignoring other filter criteria) to avoid hidden hits frustration.
+      const matchCategory = query.length > 0 || selectedCategory === 'all' || script.category === selectedCategory;
       
       const matchCountry =
+        query.length > 0 ||
         selectedCountry === 'all' ||
         (selectedCountry === 'Global' && script.countryCode === 'UN') ||
         script.country === selectedCountry;
+
+      const matchSearch =
+        query.length === 0 ||
+        script.name.toLowerCase().includes(query) ||
+        script.symbol.toLowerCase().includes(query) ||
+        script.country.toLowerCase().includes(query) ||
+        script.category.toLowerCase().includes(query) ||
+        (script.category === 'currency' && query === 'forex') ||
+        script.currencyCode.toLowerCase().includes(query);
 
       return matchSearch && matchCategory && matchCountry;
     });
@@ -148,11 +156,21 @@ export default function AddWidgetModal({
                   <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-neutral-500" />
                   <input
                     type="text"
-                    placeholder="Search e.g. BTC, Apple, Gold..."
+                    placeholder="Search (e.g., BTC, Reliance, Gold, Oil...)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-10 pr-12 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-all duration-200"
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      type="button"
+                      className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-white text-xs font-black leading-none cursor-pointer p-0.5 bg-neutral-800 rounded-full"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {/* Categories */}

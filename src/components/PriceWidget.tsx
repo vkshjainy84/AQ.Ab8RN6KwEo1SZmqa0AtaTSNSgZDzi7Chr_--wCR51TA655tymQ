@@ -14,9 +14,13 @@ import {
   ChevronRight, 
   Info, 
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Clock,
+  ZapOff,
+  BatteryMedium
 } from 'lucide-react';
 import { getCountryFlag } from '../data/scriptsData';
+import { getMarketStatus } from '../utils/marketHours';
 
 // Interactive mini sparkline data generator for the popup modal
 const generateMockSparkline = (current: number, base: number) => {
@@ -246,12 +250,27 @@ export default function PriceWidget({
 
         {/* Top toolbar row: Flag indicator + Options Cog button */}
         <div className="flex items-center justify-between w-full z-10">
-          <div className="flex items-center gap-1.5 bg-neutral-500/10 dark:bg-white/10 p-1 px-2.5 rounded-full border border-white/5 shadow-inner">
-            <span className="text-sm leading-none shrink-0 filter drop-shadow-sm">
-              {getCountryFlag(script.countryCode)}
-            </span>
-            <span className={`w-1.5 h-1.5 rounded-full ${changeIsPositive ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-          </div>
+          {(() => {
+            const marketStatus = getMarketStatus(script);
+            return (
+              <div 
+                className="flex items-center gap-1.5 bg-neutral-500/10 dark:bg-white/10 p-1 px-2.5 rounded-full border border-white/5 shadow-inner" 
+                title={`${marketStatus.statusSubtext} - ${marketStatus.nextEvent}`}
+              >
+                <span className="text-sm leading-none shrink-0 filter drop-shadow-sm">
+                  {getCountryFlag(script.countryCode)}
+                </span>
+                {marketStatus.isOpen ? (
+                  <span className={`w-1.5 h-1.5 rounded-full ${changeIsPositive ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                ) : (
+                  <span className="text-[10px] text-amber-500 dark:text-amber-400 font-black flex items-center gap-0.5 leading-none" title="Market closed - Auto-refresh paused (Silent eco-battery save)">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-[8px] font-sans font-black text-amber-500/80 dark:text-amber-400/80">ECO</span>
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           <button
             onClick={(e) => {
@@ -516,11 +535,49 @@ export default function PriceWidget({
               </div>
 
               {/* Bottom brief update state */}
-              <div className="mt-5 pt-4 border-t border-zinc-800/20 flex justify-between items-center text-[10px] text-zinc-500">
-                <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin text-zinc-600" /> Auto refreshing Live quotes</span>
+              {(() => {
+                const marketStatus = getMarketStatus(script);
+                return (
+                  <div className="mt-5 pt-4 border-t border-zinc-500/10 flex flex-col gap-2 w-full">
+                    <div className="flex justify-between items-center text-[10px] text-zinc-500">
+                      {marketStatus.isOpen ? (
+                        <span className="flex items-center gap-1 text-emerald-500 font-extrabold">
+                          <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Auto-pricing live session quotes
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-amber-500 font-extrabold" title="No battery consumed while markets are closed!">
+                          <ZapOff className="w-2.5 h-2.5" /> Eco-battery silent mode (Market Closed)
+                        </span>
+                      )}
+                      <span>Last: {state.lastUpdated}</span>
+                    </div>
+
+                    <div className={`p-2.5 rounded-xl border flex items-center justify-between text-[11px] font-bold ${
+                      marketStatus.isOpen 
+                        ? isDarkMode ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-emerald-50/50 border-emerald-100 text-emerald-700'
+                        : isDarkMode ? 'bg-amber-500/5 border-amber-500/10 text-amber-400' : 'bg-amber-50/50 border-amber-100 text-amber-700'
+                    }`}>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        <div>
+                          <p className="leading-tight">{marketStatus.statusSubtext} ({marketStatus.statusText})</p>
+                          <p className="text-[9px] text-zinc-500 leading-none mt-0.5">{marketStatus.nextEvent}</p>
+                        </div>
+                      </div>
+                      {!marketStatus.isOpen && (
+                        <span className="px-2 py-0.5 rounded text-[9px] bg-amber-500/10 text-amber-500 dark:text-amber-400 border border-amber-500/20 uppercase tracking-wider font-extrabold flex items-center gap-1">
+                          <BatteryMedium className="w-3 h-3" /> Silent Save
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-4 flex justify-end w-full">
                 <button
                   onClick={() => setShowDetailsPopup(false)}
-                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold leading-none hover:bg-indigo-700 transition"
+                  className="px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold leading-none hover:bg-indigo-700 transition text-xs"
                 >
                   Done
                 </button>
