@@ -1,0 +1,6 @@
+{
+  "name": "Clickex",
+  "description": "Selectable, button-like live price widgets for global stocks, commodities, crypto, and currency scripts across beautiful interactive wallpapers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clickex</string>
+    <string name="title_activity_main">Clickex</string>
+    <string name="package_name">com.clickex.app</string>
+    <string name="custom_url_scheme">com.clickex.app</string>
+</resources>
